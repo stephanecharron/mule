@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" basePath="api" doc:name="HTTP Listener Configuration"/>
+    <http:request-config name="HTTP_Request_Configuration" host="localhost" port="5000" doc:name="HTTP Request Configuration"/>
+    <flow name="scaterFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/process" allowedMethods="GET" doc:name="HTTP">
+            <http:response-builder statusCode="200"/>
+        </http:listener>
+        <scatter-gather doc:name="Scatter-Gather">
+            <processor-chain>
+                <http:request config-ref="HTTP_Request_Configuration" path="/pa.json" method="GET" doc:name="HTTP"/>
+                <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </processor-chain>
+            <processor-chain>
+                <http:request config-ref="HTTP_Request_Configuration" path="/pb.json" method="GET" doc:name="HTTP"/>
+                <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </processor-chain>
+        </scatter-gather>
+        <set-payload value="{
+&quot;a&quot;: #[payload[0]],
+&quot;b&quot;: #[payload[1]]
+}" mimeType="application/json" doc:name="Set Payload"/>
+    </flow>
+</mule>
