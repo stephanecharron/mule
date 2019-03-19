@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:sqs="http://www.mulesoft.org/schema/mule/sqs" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/sqs http://www.mulesoft.org/schema/mule/sqs/current/mule-sqs.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+    <db:mysql-config name="MySQL_Configuration" host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}"  doc:name="MySQL Configuration" database="${db.name}"/>
+    <sqs:config name="Amazon_SQS__Configuration" accessKey="${q.access}" secretKey="${q.secret}" defaultQueueName="${q.name}" url="${q.url}" doc:name="Amazon SQS: Configuration"/>
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" basePath="api" doc:name="HTTP Listener Configuration"/>
+    <flow name="httpinclient">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/in" allowedMethods="POST" doc:name="HTTP"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="4195e097-72e6-4444-9fff-0d6b176836d4">
+            <dw:input-payload doc:sample="/Users/stephanecharron/Documents/rTypeExemple.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	"props": payload.prop1 ++ " " ++ payload.prop2,
+	"as": now as :string {format: "yyyy-MM-dd HH:mm:ss"}
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <sqs:send-message config-ref="Amazon_SQS__Configuration" doc:name="Amazon SQS">
+            <sqs:message messageBody="#[payload]"/>
+        </sqs:send-message>
+        <set-payload value="sent to SQS!" mimeType="text/plain" doc:name="Set Payload"/>
+    </flow>
+    <flow name="muleqFlow">
+        <sqs:receive-messages config-ref="Amazon_SQS__Configuration" doc:name="Amazon SQS (Streaming)"/>
+        <set-variable variableName="copyPayload" value="#[payload]" doc:name="Variable"/>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <db:insert config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[insert into QINSERTS (props, date) values (#[payload.get("props")], #[payload.get("as")]);]]></db:parameterized-query>
+        </db:insert>
+        <logger message="#[flowVars.copyPayload]" level="INFO" doc:name="Logger"/>
+    </flow>
+
+
+</mule>
